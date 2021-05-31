@@ -61,6 +61,9 @@ public class NamesrvController {
     private FileWatchService fileWatchService;
 
     public NamesrvController(NamesrvConfig namesrvConfig, NettyServerConfig nettyServerConfig) {
+        /**
+         * 主要保存了一些实例变量的值
+         */
         this.namesrvConfig = namesrvConfig;
         this.nettyServerConfig = nettyServerConfig;
         this.kvConfigManager = new KVConfigManager(this);
@@ -72,18 +75,38 @@ public class NamesrvController {
         );
         this.configuration.setStorePathFromConfig(this.namesrvConfig, "configStorePath");
     }
-
+    /** description: 初始化NamesrvController
+     * 1. 加载一些kv的配置
+     * 2. 初始化netty服务器
+     *  1). 传入的是netty服务器的一些配置
+     * 3. 设置netty服务器的工作线程池
+     * 4. 把工作线程池给netty服务器
+     * 5. 启动一个定时任务,定时检查Broker心跳
+     * 6. 这个是和FileWatch相关的
+     * @param
+     * @return: boolean
+     * @Author: zeryts
+     * @email: hezitao@agree.com
+     * @Date: 2021/5/31 15:44
+     */
     public boolean initialize() {
 
+
         this.kvConfigManager.load();
-
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
-
+        /**
+         * netty的工作线程
+         */
         this.remotingExecutor =
             Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
-
+        /**
+         * 把工作线程池给netty服务器
+         */
         this.registerProcessor();
-
+        /**
+         * 一个定时任务
+         * 定时扫描Broker心跳
+         */
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -99,7 +122,9 @@ public class NamesrvController {
                 NamesrvController.this.kvConfigManager.printAllPeriodically();
             }
         }, 1, 10, TimeUnit.MINUTES);
-
+        /**
+         * 这个是和FileWatch相关的
+         */
         if (TlsSystemConfig.tlsMode != TlsMode.DISABLED) {
             // Register a listener to reload SslContext
             try {

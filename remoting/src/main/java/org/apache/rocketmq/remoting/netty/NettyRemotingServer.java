@@ -178,9 +178,22 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             && nettyServerConfig.isUseEpollNativeSelector()
             && Epoll.isAvailable();
     }
-
+    /** description: 启动Netty服务
+     *  1). 基于Netty的API去配置Netty的网络信息
+     *  2). 设置了一大堆网络请求处理器,只要netty服务器收到一个请求,那么就会依次使用下面的处理器来处理请求
+     *      (1). handshakeHandler  负责握手
+     *      (2). NettyDecoder      负责编码解码
+     *      (3). IdleStateHandler  负责连接空闲管理
+     *      (4). connectionManageHandler 负责网络连接管理
+     *      (5). serverHandler    负责网络请求处理
+     *   3). 启动netty服务,并且绑定和监听端口
+     * @Author: zeryts
+     * @email: hezitao@agree.com
+     * @Date: 2021/5/31 16:01
+     */
     @Override
     public void start() {
+
         this.defaultEventExecutorGroup = new DefaultEventExecutorGroup(
             nettyServerConfig.getServerWorkerThreads(),
             new ThreadFactory() {
@@ -194,7 +207,9 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             });
 
         prepareSharableHandlers();
-
+        /**
+         * 基于Netty的API去配置Netty的网络信息
+         */
         ServerBootstrap childHandler =
             this.serverBootstrap.group(this.eventLoopGroupBoss, this.eventLoopGroupSelector)
                 .channel(useEpoll() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
@@ -205,6 +220,14 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                 .childOption(ChannelOption.SO_SNDBUF, nettyServerConfig.getServerSocketSndBufSize())
                 .childOption(ChannelOption.SO_RCVBUF, nettyServerConfig.getServerSocketRcvBufSize())
                 .localAddress(new InetSocketAddress(this.nettyServerConfig.getListenPort()))
+                    /**
+                     * 设置了一大堆网络请求处理器,只要netty服务器收到一个请求,那么就会依次使用下面的处理器来处理请求
+                     * handshakeHandler  负责握手
+                     * NettyDecoder      负责编码解码
+                     * IdleStateHandler  负责连接空闲管理
+                     * connectionManageHandler 负责网络连接管理
+                     * serverHandler    负责网络请求处理
+                     */
                 .childHandler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     public void initChannel(SocketChannel ch) throws Exception {
@@ -225,6 +248,10 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
         }
 
         try {
+            /**
+             * 启动netty服务
+             * bind方法就是绑定和监听一个端口
+             */
             ChannelFuture sync = this.serverBootstrap.bind().sync();
             InetSocketAddress addr = (InetSocketAddress) sync.channel().localAddress();
             this.port = addr.getPort();
