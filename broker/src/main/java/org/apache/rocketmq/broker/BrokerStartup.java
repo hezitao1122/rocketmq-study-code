@@ -104,6 +104,34 @@ public class BrokerStartup {
      *  12. 判断是否基于dleger技术来管理主从同步和commitlog,如果是则设置为-1
      *  13. 设置HA监听端口号
      *  14. 配置日志和打印参数相关
+     *  15. 构建BrokerController核心组件
+     *  16. 执行初始化BrokerController
+     *         1). 加载一些磁盘上的数据进内存之中
+     *             (1). Topic配置
+     *             (2). Consumer的消费offset
+     *             (3). Consumer订阅组\过滤器
+     *             (4). 加载完成后,result则是true
+     *         2). 加载成功后执行以下逻辑
+     *             (1). 首先创建了消息存储管理组件
+     *             (2). 初始化并启动dleger技术进行主从同步以及管理commitlog
+     *             (3). 初始化broker的统计组件
+     *         3. 加载netty服务的信息
+     *         4. 初始化一堆线程,如请求处理(sendMessageExecutor)、
+     *             (1). pullMessageExecutor消息拉取、
+     *             (2). replyMessageExecutor 回复消息、
+     *             (3). queryMessageExecutor 查询消息、
+     *             (4). adminBrokerExecutor  管理broker、
+     *             (5). clientManageExecutor  管理客户端、
+     *             (6). heartbeatExecutor    发送心跳、
+     *             (7). endTransactionExecutor  结束事务、
+     *             (8). consumerManageExecutor  管理consumer线程池
+     *         5. 开始定时调度一些后台线程执行
+     *             (1). getBrokerStats broker统计任务
+     *             (2). consumerOffsetManager 定时进行consumer消费,offset持久化到磁盘的任务
+     *             (3). consumerFilterManager 定时对consumer filter过滤器进行持久化的任务
+     *             (4). protectBroker  定时进行broker保护的任务
+     *             (5). getMessageStore 进行落后的connitlog分发的任务
+     *  17. 注册一个JVM关闭的钩子,去调用BrokerController的关闭信息
      * @param args 命令行传递的参数
      * @return: org.apache.rocketmq.broker.BrokerController
      * @Author: zeryts
@@ -279,7 +307,9 @@ public class BrokerStartup {
             MixAll.printObjectProperties(log, nettyServerConfig);
             MixAll.printObjectProperties(log, nettyClientConfig);
             MixAll.printObjectProperties(log, messageStoreConfig);
-
+            /**
+             * 构建BrokerController核心组件
+             */
             final BrokerController controller = new BrokerController(
                 brokerConfig,
                 nettyServerConfig,
@@ -288,12 +318,18 @@ public class BrokerStartup {
             // remember all configs to prevent discard
             controller.getConfiguration().registerConfig(properties);
 
+            /**
+             * 初始化BrokerController
+             */
             boolean initResult = controller.initialize();
             if (!initResult) {
                 controller.shutdown();
                 System.exit(-3);
             }
 
+            /**
+             * 注册一个JVM关闭的钩子,去调用BrokerController的关闭信息
+             */
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 private volatile boolean hasShutdown = false;
                 private AtomicInteger shutdownTimes = new AtomicInteger(0);
